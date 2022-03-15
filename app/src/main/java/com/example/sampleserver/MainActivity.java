@@ -80,15 +80,13 @@ public class MainActivity extends AppCompatActivity {
         msg = (TextView) findViewById(R.id.msg);
 
 
-
         serverButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(!serverUp && isExternalStorageAvaibleForRW()){
+                if (!serverUp && isExternalStorageAvaibleForRW()) {
                     startServer(PORT);
                     serverUp = true;
-                }
-                else {
+                } else {
                     stopServer();
                     serverUp = false;
                 }
@@ -97,209 +95,208 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private String getIpAddress(){
+    // Получение локального IP адреса и порта
+    private String getIpAddress() {
+        String ERROR = "";
         String ip = "";
         try {
             Enumeration<NetworkInterface> enumNetworkInterfaces = NetworkInterface
                     .getNetworkInterfaces();
-            while (enumNetworkInterfaces.hasMoreElements()){
+            while (enumNetworkInterfaces.hasMoreElements()) {
                 NetworkInterface networkInterface = enumNetworkInterfaces
                         .nextElement();
                 Enumeration<InetAddress> enumInetAddress = networkInterface
                         .getInetAddresses();
-                while (enumInetAddress.hasMoreElements()){
+                while (enumInetAddress.hasMoreElements()) {
                     InetAddress inetAddress = enumInetAddress.nextElement();
 
-                    if(inetAddress.isSiteLocalAddress()){
+                    if (inetAddress.isSiteLocalAddress()) {
                         ip += "Site Local Address:\n"
                                 + inetAddress.getHostAddress();
                     }
                 }
             }
-        } catch (SocketException e){
+        } catch (SocketException e) {
             e.printStackTrace();
-            ip += "Something Wrong! " + e.toString() + "\n";
+
+            // Запись сообщения об ошибке с сетью
+            DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
+            String date = dateFormat.format(Calendar.getInstance().getTime());
+            ERROR += "\n\n" + date + " : ERROR get IP !!! " + e.getMessage() + "\n\n";
+            writeData(ERROR);
         }
         return ip;
     }
 
-    public static String streamToString(InputStream inputStream){
 
+    // Перевод входящего потока(запроса) в строку
+    public static String streamToString(InputStream inputStream) {
         Scanner s = (new Scanner(inputStream)).useDelimiter("\\A");
-        if(s.hasNext()){
+        if (s.hasNext()) {
             return s.next();
-        }
-        else {
+        } else {
             return "";
         }
     }
 
+    // Отправка ответа с сервера(телефона) на запрос
     public void sendResponse(HttpExchange httpExchange, String responseText) throws IOException {
         byte[] bytes = responseText.getBytes(StandardCharsets.UTF_8);
         httpExchange.sendResponseHeaders(200, bytes.length);
-        //serverTextView.setText(httpExchange.getLocalAddress().toString());
         OutputStream os = httpExchange.getResponseBody();
         os.write(bytes);
-        //os.flush();
         os.close();
     }
 
 
-
+    // Запуск сервера
     private void startServer(int port) {
+        String ERROR = "";
 
-       try {
-           httpServer = HttpServer.create(new InetSocketAddress(port), 0);
-           httpServer.setExecutor(null);
+        try {
 
-           httpServer.createContext("/", new HttpHandler() {
-               @Override
-               public void handle(HttpExchange httpExchange) throws IOException {
-                   //serverTextView.setText("Server is running..." + httpExchange.getLocalAddress().toString());
-                   if("GET".equals(httpExchange.getRequestMethod())){
-                       sendResponse(httpExchange, "Hello, Andrey!");
-                   } else {
+        // УТОЧНИТЬ ЗАЧЕМ !!!
 
-                       sendResponse(httpExchange, "Buy, Andrey!");
-                   }
-               }
-           });
-
-           httpServer.createContext("/messages", new messageHandler());
-           httpServer.start();
+        httpServer = HttpServer.create(new InetSocketAddress(port), 0);
+        httpServer.setExecutor(null);
 
 
-           serverTextView.setText(getIpAddress() + ":" + port + "\n");
-           serverButton.setText("Stop Server");
-           DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
-           String date = dateFormat.format(Calendar.getInstance().getTime());
-           msgLog += date + " : Server Start\n";
+        // 10.0.2.15:5055/messages
 
-           viewScrollView(msgLog);
-           File myExtStor = new File(getExternalFilesDir(filePath), fileName);
-           FileOutputStream fos = null;
-           fos = new FileOutputStream(myExtStor);
-           fos.write(msgLog.getBytes(StandardCharsets.UTF_8));
+        httpServer.createContext("/messages", new messageHandler());
+        httpServer.start();
+        serverTextView.setText(getIpAddress() + ":" + port + "\n");
+        serverButton.setText("Stop Server");
+        DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
+        String date = dateFormat.format(Calendar.getInstance().getTime());
+        msgLog += date + " : Server Start\n";
 
-       } catch (FileNotFoundException e){
-           e.printStackTrace();
-       }
-       catch (IOException e) {
-           e.printStackTrace();
-       }
+        viewScrollView(msgLog);
 
+        } catch (IOException e) {
+            e.printStackTrace();
+
+            // Запись сообщения об ошибке с сетью
+            DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
+            String date = dateFormat.format(Calendar.getInstance().getTime());
+            ERROR += "\n\n" + date + " : ERROR(startServer) IOException !!! " + e.getMessage() + "\n\n";
+            writeData(ERROR);
+        }
     }
 
 
+    public class messageHandler implements HttpHandler {
+        String ERROR = "";
+        String writedata = "";
+        String goodRequest = "{ \n" +
+                "    \"StatusOnPhone\": \"Yes\", \n" +
+                "}";
+        String badRequest = "{ \n" +
+                "    \"StatusOnPhone\": \"No\", \n" +
+                "}";
 
-    public class messageHandler implements HttpHandler{
         @Override
         public void handle(HttpExchange httpExchange) throws IOException {
-            if("GET".equals(httpExchange.getRequestMethod())){
-                sendResponse(httpExchange, "Would be all messages stringified json");
-            } else if("POST".equals(httpExchange.getRequestMethod())){
+
+            // Проверка, что пришел POST запрос
+            if ("POST".equals(httpExchange.getRequestMethod())) {
+
+                // Получение данных из запроса
                 InputStream inputStream = httpExchange.getRequestBody();
                 String requestBody = streamToString(inputStream);
                 JSONObject jsonBody = null;
-
-
                 try {
                     jsonBody = new JSONObject(requestBody);
-                    if (!jsonBody.get("Phone").toString().isEmpty() && !jsonBody.get("Text").toString().isEmpty())
-                    {
-                        String goodRequest = "{ \n" +
-                                "    \"StatusOnPhone\": \"Yes\", \n" +
-                                "}";
+                    // Проверка, что в запросе есть нужные данные
+                    if (!jsonBody.get("Phone").toString().isEmpty() && !jsonBody.get("Text").toString().isEmpty() && !jsonBody.get("INN").toString().isEmpty()) {
+                        // Отправка ответа, если данных корректны
+
+                        String INN = jsonBody.get("INN").toString();
                         String Phone = jsonBody.get("Phone").toString();
                         String Text = jsonBody.get("Text").toString();
 
-                       // Telephony.SMS(Phone, Text);
+                        // Запись полученных данных из JSON
+                        DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
+                        String date = dateFormat.format(Calendar.getInstance().getTime());
+                        writedata += date + " : NEW_DATA:" + "\n" +
+                                "\t" + INN + "\n" +
+                                "\t" + Phone + "\n" +
+                                "\t" + Text + "\n";
+                        writeData(writedata);
+
+                        // Отправка SMS
+                        //Telephony.SMS(Phone, Text);
 
                         sendResponse(httpExchange, goodRequest.toString());
                     } else {
-                        String badRequest = "{ \n" +
-                                "    \"StatusOnPhone\": \"No\", \n" +
-                                "}";
+                        // Отправка ответа, если данных повреждены
 
                         sendResponse(httpExchange, badRequest.toString());
                     }
-
                 } catch (JSONException e) {
                     e.printStackTrace();
                     sendResponse(httpExchange, e.getMessage());
+
+                    // Запись сообщения об ошибке с распознаванием JSON
+                    DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
+                    String date = dateFormat.format(Calendar.getInstance().getTime());
+                    ERROR += "\n\n" + date + " : ERROR(messageHandler)  JSONException!!! " + e.getMessage() + "\n\n";
+                    writeData(ERROR);
                 }
-
             }
-
-
         }
-
     }
 
+    // Остановка сервера
     private void stopServer() {
-        if(httpServer != null){
-            try {
-                httpServer.stop(0);
-                serverTextView.setText("Server is down");
-                serverButton.setText("Start Server");
-
-
-
-                DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
-                String date = dateFormat.format(Calendar.getInstance().getTime());
-                msgLog += date + " : Server Stop\n\n";
-
-
-
-
-                viewScrollView(msgLog);
-            } catch (FileNotFoundException e){
-                e.printStackTrace();
-            } catch (IOException e){
-                e.printStackTrace();
-            }
-
-
+        if (httpServer != null) {
+            httpServer.stop(0);
+            serverTextView.setText("Server is down");
+            serverButton.setText("Start Server");
+            DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
+            String date = dateFormat.format(Calendar.getInstance().getTime());
+            msgLog += date + " : Server Stop\n\n";
+            viewScrollView(msgLog);
         }
-
     }
-    private void viewScrollView(String data){
+
+    // Вывод данных на дисплей в ScrollView
+    private void viewScrollView(String data) {
         MainActivity.this.runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 writeData(data);
-                msg.setText(data, TextView.BufferType.SPANNABLE);
-
+                msg.setText(data);
             }
         });
     }
 
-    private boolean isExternalStorageAvaibleForRW(){
+
+    // Проверка, что во внешнее хранилище можно записывать данные
+    private boolean isExternalStorageAvaibleForRW() {
         String exStorageState = Environment.getExternalStorageState();
-        if(exStorageState.equals(Environment.MEDIA_MOUNTED)){
+        if (exStorageState.equals(Environment.MEDIA_MOUNTED)) {
             return true;
         }
         return false;
     }
 
+    // Запись данных в файл
     private void writeData(String data) {
+        File myExternalStorage = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath());
+        File documentsFile = new File(myExternalStorage, fileName);
+        FileOutputStream fos = null;
         try {
-            File myExtStor = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), fileName);
-            FileOutputStream fos = null;
-            fos = new FileOutputStream(myExtStor);
-            if(myExtStor.exists()){
-                fos.
-                fos.write(data.getBytes(StandardCharsets.UTF_8));
-            }
-
-
-
+            fos = new FileOutputStream(documentsFile, true);
+            fos.write(data.getBytes(StandardCharsets.UTF_8));
+            fos.close();
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
+
 
 
 }
