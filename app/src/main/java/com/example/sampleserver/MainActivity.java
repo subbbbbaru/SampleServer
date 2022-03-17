@@ -3,10 +3,18 @@ package com.example.sampleserver;
 import androidx.annotation.ColorInt;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.app.Application;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.PowerManager;
+import android.os.SystemClock;
+import android.provider.Settings;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
@@ -67,8 +75,13 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        PowerManager.WakeLock wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                "MyApp::MyWakelockTag");
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
 
         fileName = "testFile.txt";
         filePath = "testDir";
@@ -79,20 +92,48 @@ public class MainActivity extends AppCompatActivity {
         scrollView = (ScrollView) findViewById(R.id.scrollView);
         msg = (TextView) findViewById(R.id.msg);
 
-
+        if (hasDeviceBeenRebooted(getApplication())) {
+            if (!serverUp && isExternalStorageAvaibleForRW()) {
+                startServer(PORT);
+                serverUp = true;
+                wakeLock.acquire();
+            }
+        }
         serverButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (!serverUp && isExternalStorageAvaibleForRW()) {
                     startServer(PORT);
                     serverUp = true;
+                    wakeLock.acquire();
                 } else {
                     stopServer();
                     serverUp = false;
+                    wakeLock.release();
                 }
             }
         });
 
+
+    }
+
+
+    // Определяет было ли устройство перезагружено
+    public final boolean hasDeviceBeenRebooted(Application app) {
+        String REBOOT_PREFS = "reboot prefs";
+        String REBOOT_KEY = "reboot key";
+        SharedPreferences sharedPrefs = app.getSharedPreferences(REBOOT_PREFS, 0);
+        long expectedTimeSinceReboot = sharedPrefs.getLong(REBOOT_KEY, 0L);
+        long actualTimeSinceReboot = System.currentTimeMillis() - SystemClock.elapsedRealtime();
+        sharedPrefs.edit().putLong(REBOOT_KEY, actualTimeSinceReboot).apply();
+        long prev_start_app = expectedTimeSinceReboot - (long) 9000;
+        long next_start_app = expectedTimeSinceReboot + (long) 9000;
+        if (prev_start_app <= actualTimeSinceReboot) {
+            if (next_start_app >= actualTimeSinceReboot) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Получение локального IP адреса и порта
@@ -155,23 +196,23 @@ public class MainActivity extends AppCompatActivity {
 
         try {
 
-        // УТОЧНИТЬ ЗАЧЕМ !!!
+            // УТОЧНИТЬ ЗАЧЕМ !!!
 
-        httpServer = HttpServer.create(new InetSocketAddress(port), 0);
-        httpServer.setExecutor(null);
+            httpServer = HttpServer.create(new InetSocketAddress(port), 0);
+            httpServer.setExecutor(null);
 
 
-        // 10.0.2.15:5055/messages
+            // 10.0.2.15:5055/messages
 
-        httpServer.createContext("/messages", new messageHandler());
-        httpServer.start();
-        serverTextView.setText(getIpAddress() + ":" + port + "\n");
-        serverButton.setText("Stop Server");
-        DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
-        String date = dateFormat.format(Calendar.getInstance().getTime());
-        msgLog += date + " : Server Start\n";
+            httpServer.createContext("/messages", new messageHandler());
+            httpServer.start();
+            serverTextView.setText(getIpAddress() + ":" + port + "\n");
+            serverButton.setText("Stop Server");
+            DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
+            String date = dateFormat.format(Calendar.getInstance().getTime());
+            msgLog += date + " : Server Start\n";
 
-        viewScrollView(msgLog);
+            viewScrollView(msgLog);
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -225,7 +266,7 @@ public class MainActivity extends AppCompatActivity {
                         writeData(writedata);
 
                         // Отправка SMS
-                        //Telephony.SMS(Phone, Text);
+                        Telephony.SMS(Phone, Text);
 
                         sendResponse(httpExchange, goodRequest.toString());
                     } else {
@@ -296,7 +337,6 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-
 
 
 }
