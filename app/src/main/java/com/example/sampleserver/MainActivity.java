@@ -26,6 +26,10 @@ import android.widget.TextView;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsExchange;
+import com.sun.net.httpserver.HttpsServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsParameters;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -42,6 +46,9 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -50,12 +57,16 @@ import java.util.Enumeration;
 import java.util.Scanner;
 import java.util.concurrent.Executors;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+
 import sun.misc.Resource;
 
 public class MainActivity extends AppCompatActivity {
 
     private boolean serverUp = false;
     private HttpServer httpServer;
+    private HttpsServer httpsServer;
 
     String msgLog = "";
     String fileName = "";
@@ -181,12 +192,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // Отправка ответа с сервера(телефона) на запрос
-    public void sendResponse(HttpExchange httpExchange, String responseText) throws IOException {
+    public void sendResponse(HttpExchange httpsExchange, String responseText) throws IOException {
         byte[] bytes = responseText.getBytes(StandardCharsets.UTF_8);
+        httpsExchange.sendResponseHeaders(200, bytes.length);
+        OutputStream os = httpsExchange.getResponseBody();
+        os.write(bytes);
+        os.close();
+        
+        
+        
+        /*byte[] bytes = responseText.getBytes(StandardCharsets.UTF_8);
         httpExchange.sendResponseHeaders(200, bytes.length);
         OutputStream os = httpExchange.getResponseBody();
         os.write(bytes);
-        os.close();
+        os.close();*/
     }
 
 
@@ -195,6 +214,34 @@ public class MainActivity extends AppCompatActivity {
         String ERROR = "";
 
         try {
+/*
+
+            //String keyStore = getpat
+
+            httpsServer = HttpsServer.create(new InetSocketAddress(port), 0);
+            httpsServer.setExecutor(null);
+            //tmf = TrustManagerFactory.getInstance("SunX509");
+            //tmf.
+
+            SSLContext sslContext = SSLContext.getInstance("SSL");
+            HttpsConfigurator httpsConfigurator = new HttpsConfigurator(sslContext);
+            httpsServer.setHttpsConfigurator(httpsConfigurator);
+            httpsServer.createContext("/messages", new messageHandler());
+            httpsServer.start();
+            serverTextView.setText(getIpAddress() + ":" + port + "\n");
+            serverButton.setText("Stop Server");
+            DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
+            String date = dateFormat.format(Calendar.getInstance().getTime());
+            msgLog += date + " : HTTPS Server Start\n";
+
+            viewScrollView(msgLog);
+*/
+
+
+
+
+
+
 
             // УТОЧНИТЬ ЗАЧЕМ !!!
 
@@ -214,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
 
             viewScrollView(msgLog);
 
-        } catch (IOException e) {
+        } catch (IOException /*| NoSuchAlgorithmException*/ e) {
             e.printStackTrace();
 
             // Запись сообщения об ошибке с сетью
@@ -290,6 +337,15 @@ public class MainActivity extends AppCompatActivity {
 
     // Остановка сервера
     private void stopServer() {
+        /*if (httpsServer != null) {
+            httpsServer.stop(0);
+            serverTextView.setText("Server is down");
+            serverButton.setText("Start Server");
+            DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
+            String date = dateFormat.format(Calendar.getInstance().getTime());
+            msgLog += date + " : HTTPS Server Stop\n\n";
+            viewScrollView(msgLog);
+        }*/
         if (httpServer != null) {
             httpServer.stop(0);
             serverTextView.setText("Server is down");

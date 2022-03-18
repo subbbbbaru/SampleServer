@@ -32,8 +32,8 @@ public class Telephony {
         try {
             SmsManager smsManager = SmsManager.getDefault();
             smsManager.sendTextMessage( tel, null, text, null, null );
-            Toast.makeText( context,
-                    "SMS отправлено!", Toast.LENGTH_LONG ).show();
+            //Toast.makeText( context,
+            //        "SMS отправлено!", Toast.LENGTH_LONG ).show();
             }
             catch (Exception e){
                     Toast.makeText(context,
