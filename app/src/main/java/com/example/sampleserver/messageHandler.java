@@ -38,7 +38,7 @@ public class messageHandler implements HttpHandler {
             String token_file = ReadData.readData(HOSTNAME + ".txt");
 
             if (token_file.isEmpty()){
-                sendResponse(402, httpExchange, constants.badRequest_Host);
+                sendResponse(constants.badRequest_Host_int, httpExchange, constants.badRequest_Host);
             } else if(headers.containsKey("Token") && headers.get("Token").get(0).equals(token_file)){
 
                 ReadData.deleteFile(HOSTNAME + ".txt");
@@ -69,11 +69,11 @@ public class messageHandler implements HttpHandler {
                         // Отправка SMS
                         //Telephony.SMS(Phone, Text);
 
-                        sendResponse(200, httpExchange, constants.goodRequest.toString());
+                        sendResponse(constants.goodRequest_int, httpExchange, constants.goodRequest.toString());
                     } else {
                         // Отправка ответа, если данных повреждены
 
-                        sendResponse(400, httpExchange, constants.badRequest.toString());
+                        sendResponse(constants.badRequest_int, httpExchange, constants.badRequest.toString());
                     }
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -86,7 +86,7 @@ public class messageHandler implements HttpHandler {
                     WriteData.writeData(ERROR);
                 }
             } else {
-                sendResponse(402, httpExchange, constants.badRequest_Token.toString());
+                sendResponse(constants.badRequest_Token_int, httpExchange, constants.badRequest_Token.toString());
             }
         }
     }
@@ -119,6 +119,6 @@ public class messageHandler implements HttpHandler {
         }
     }
     public void sendResponse(HttpExchange httpsExchange, String responseText) throws IOException {
-        sendResponse(404, httpsExchange, responseText);
+        sendResponse(constants.ERROR, httpsExchange, responseText);
     }
 }

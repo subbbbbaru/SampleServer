@@ -11,15 +11,24 @@ public class constants {
     public static final String goodRequest = "{ \n" + // 200
             "    \"StatusOnPhone\": \"Yes\", \n" +
             "}";
+    public static final int goodRequest_int = 200;
+
     public static final String badRequest = "{ \n" + // 400
             "    \"StatusOnPhone\": \"No\", \n" +
             "}";
-    public static final String badRequest_Token = "{ \n" + // 402
+    public static final int badRequest_int = 400;
+
+    public static final String badRequest_Token = "{ \n" + // 401
             "    \"StatusOnPhone\": \"Bad Token\", \n" +
             "}";
-    public static final String badRequest_Host = "{ \n" + // 402
+    public static final int badRequest_Token_int = 401;
+
+    public static final String badRequest_Host = "{ \n" + // 401
             "    \"StatusOnPhone\": \"Bad Host\", \n" +
             "}";
+    public static final int badRequest_Host_int = 401;
+
+    public static final int ERROR = 404;
 
 
 
