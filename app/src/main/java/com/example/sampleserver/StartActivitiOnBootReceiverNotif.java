@@ -30,7 +30,6 @@ public class StartActivitiOnBootReceiverNotif extends BroadcastReceiver {
             // If android 10 or higher
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P)
             {
-
                 startActivityNotification(context,NOTIFICATION_ID,context.getResources().getString(R.string.app_name), context.getResources().getString(R.string.app_name));
 
             }

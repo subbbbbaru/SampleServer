@@ -1,35 +1,35 @@
 package com.example.sampleserver;
 
-import androidx.annotation.ColorInt;
-import androidx.appcompat.app.AppCompatActivity;
+import static com.example.sampleserver.constants.ctpass;
+import static com.example.sampleserver.constants.kspass;
 
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
+import android.Manifest;
 import android.app.Application;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.Resources;
-import android.graphics.Color;
-import android.net.Uri;
-import android.os.Build;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.PowerManager;
 import android.os.SystemClock;
-import android.provider.Settings;
-import android.text.SpannableString;
-import android.text.Spanned;
-import android.text.style.ForegroundColorSpan;
+import android.renderscript.Element;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import com.sun.net.httpserver.BasicAuthenticator;
+import com.sun.net.httpserver.Headers;
+import com.sun.net.httpserver.HttpContext;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpPrincipal;
 import com.sun.net.httpserver.HttpServer;
-import com.sun.net.httpserver.HttpsExchange;
 import com.sun.net.httpserver.HttpsServer;
 import com.sun.net.httpserver.HttpsConfigurator;
-import com.sun.net.httpserver.HttpsParameters;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -44,23 +44,33 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyManagementException;
+import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Base64;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.Scanner;
-import java.util.concurrent.Executors;
 
+import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 
-import sun.misc.Resource;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -69,9 +79,8 @@ public class MainActivity extends AppCompatActivity {
     private HttpsServer httpsServer;
 
     String msgLog = "";
-    String fileName = "";
-    String filePath = "";
-    int PORT = 5055;
+
+
 
     TextView serverTextView;
     Button serverButton;
@@ -93,28 +102,25 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-
-        fileName = "testFile.txt";
-        filePath = "testDir";
-
-
         serverTextView = (TextView) findViewById(R.id.serverTextView);
         serverButton = (Button) findViewById(R.id.serverButton);
         scrollView = (ScrollView) findViewById(R.id.scrollView);
         msg = (TextView) findViewById(R.id.msg);
 
         if (hasDeviceBeenRebooted(getApplication())) {
-            if (!serverUp && isExternalStorageAvaibleForRW()) {
-                startServer(PORT);
+            if (!serverUp && WriteData.isExternalStorageAvaibleForRW()) {
+                startServer(constants.PORT);
                 serverUp = true;
                 wakeLock.acquire();
             }
         }
+
+
         serverButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (!serverUp && isExternalStorageAvaibleForRW()) {
-                    startServer(PORT);
+                if (!serverUp && WriteData.isExternalStorageAvaibleForRW()) {
+                    startServer(constants.PORT);
                     serverUp = true;
                     wakeLock.acquire();
                 } else {
@@ -127,6 +133,7 @@ public class MainActivity extends AppCompatActivity {
 
 
     }
+
 
 
     // Определяет было ли устройство перезагружено
@@ -147,66 +154,7 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
-    // Получение локального IP адреса и порта
-    private String getIpAddress() {
-        String ERROR = "";
-        String ip = "";
-        try {
-            Enumeration<NetworkInterface> enumNetworkInterfaces = NetworkInterface
-                    .getNetworkInterfaces();
-            while (enumNetworkInterfaces.hasMoreElements()) {
-                NetworkInterface networkInterface = enumNetworkInterfaces
-                        .nextElement();
-                Enumeration<InetAddress> enumInetAddress = networkInterface
-                        .getInetAddresses();
-                while (enumInetAddress.hasMoreElements()) {
-                    InetAddress inetAddress = enumInetAddress.nextElement();
 
-                    if (inetAddress.isSiteLocalAddress()) {
-                        ip += "Site Local Address:\n"
-                                + inetAddress.getHostAddress();
-                    }
-                }
-            }
-        } catch (SocketException e) {
-            e.printStackTrace();
-
-            // Запись сообщения об ошибке с сетью
-            DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
-            String date = dateFormat.format(Calendar.getInstance().getTime());
-            ERROR += "\n\n" + date + " : ERROR get IP !!! " + e.getMessage() + "\n\n";
-            writeData(ERROR);
-        }
-        return ip;
-    }
-
-
-    // Перевод входящего потока(запроса) в строку
-    public static String streamToString(InputStream inputStream) {
-        Scanner s = (new Scanner(inputStream)).useDelimiter("\\A");
-        if (s.hasNext()) {
-            return s.next();
-        } else {
-            return "";
-        }
-    }
-
-    // Отправка ответа с сервера(телефона) на запрос
-    public void sendResponse(HttpExchange httpsExchange, String responseText) throws IOException {
-        byte[] bytes = responseText.getBytes(StandardCharsets.UTF_8);
-        httpsExchange.sendResponseHeaders(200, bytes.length);
-        OutputStream os = httpsExchange.getResponseBody();
-        os.write(bytes);
-        os.close();
-        
-        
-        
-        /*byte[] bytes = responseText.getBytes(StandardCharsets.UTF_8);
-        httpExchange.sendResponseHeaders(200, bytes.length);
-        OutputStream os = httpExchange.getResponseBody();
-        os.write(bytes);
-        os.close();*/
-    }
 
 
     // Запуск сервера
@@ -214,34 +162,72 @@ public class MainActivity extends AppCompatActivity {
         String ERROR = "";
 
         try {
-/*
 
-            //String keyStore = getpat
+            // HTTPS запрос
+            // https://stackoverflow.com/questions/31448260/nanohttpd-https-server-in-android-android-and-ios-browser-connect-fail
+            // https://ktor.io/docs/ssl.html#convert-certificate
+            // https://proandroiddev.com/running-tls-protected-http-server-on-android-using-ktor-49bdbc7f5e1f
+            // https://github.com/AlphaGarden/SSL-Client-Server/blob/master/src/main/java/server/SSLServer.java
+            // https://stackoverflow.com/questions/31270613/https-server-on-android-device-using-nanohttpd
+
+
+
+
+            KeyStore keyStore = KeyStore.getInstance("PKCS12");
+            keyStore.load(getResources().getAssets().open("certificate-server.p12"),constants.kspass);
+
+           /* KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
+            keyManagerFactory.init(keyStore,passfrase);*/
+
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(keyStore, constants.ctpass);
+
+
+            TrustManagerFactory tmFactory = TrustManagerFactory.getInstance("X509");
+            tmFactory.init(keyStore);
+
+            X509TrustManager x509TrustManager = null;
+            for (TrustManager trustManager : tmFactory.getTrustManagers()) {
+                if (trustManager instanceof X509TrustManager) {
+                    x509TrustManager = (X509TrustManager) trustManager;
+                    break;
+                }
+            }
+
+            if (x509TrustManager == null) throw new NullPointerException();
+
+            SSLContext sslContext = SSLContext.getInstance("SSL");
+            sslContext.init(kmf.getKeyManagers(),tmFactory.getTrustManagers(),null);
+
+
 
             httpsServer = HttpsServer.create(new InetSocketAddress(port), 0);
             httpsServer.setExecutor(null);
-            //tmf = TrustManagerFactory.getInstance("SunX509");
-            //tmf.
 
-            SSLContext sslContext = SSLContext.getInstance("SSL");
+
+
             HttpsConfigurator httpsConfigurator = new HttpsConfigurator(sslContext);
             httpsServer.setHttpsConfigurator(httpsConfigurator);
+
+
+            httpsServer.createContext("/login", new LoginHandler());
             httpsServer.createContext("/messages", new messageHandler());
+
+
             httpsServer.start();
-            serverTextView.setText(getIpAddress() + ":" + port + "\n");
+            serverTextView.setText(GetIpAddress.getIpAddress() + ":" + port + "\n");
             serverButton.setText("Stop Server");
             DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
             String date = dateFormat.format(Calendar.getInstance().getTime());
             msgLog += date + " : HTTPS Server Start\n";
 
             viewScrollView(msgLog);
-*/
 
 
+//  ДЛЯ HTTP ЗАПРОСА
 
 
-
-
+/*
 
             // УТОЧНИТЬ ЗАЧЕМ !!!
 
@@ -259,7 +245,7 @@ public class MainActivity extends AppCompatActivity {
             String date = dateFormat.format(Calendar.getInstance().getTime());
             msgLog += date + " : Server Start\n";
 
-            viewScrollView(msgLog);
+            viewScrollView(msgLog);*/
 
         } catch (IOException /*| NoSuchAlgorithmException*/ e) {
             e.printStackTrace();
@@ -268,76 +254,26 @@ public class MainActivity extends AppCompatActivity {
             DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
             String date = dateFormat.format(Calendar.getInstance().getTime());
             ERROR += "\n\n" + date + " : ERROR(startServer) IOException !!! " + e.getMessage() + "\n\n";
-            writeData(ERROR);
+            WriteData.writeData(ERROR);
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        } catch (KeyStoreException e) {
+            e.printStackTrace();
+        } catch (UnrecoverableKeyException e) {
+            e.printStackTrace();
+        } catch (CertificateException e) {
+            e.printStackTrace();
+        } catch (KeyManagementException e) {
+            e.printStackTrace();
         }
     }
 
 
-    public class messageHandler implements HttpHandler {
-        String ERROR = "";
-        String writedata = "";
-        String goodRequest = "{ \n" +
-                "    \"StatusOnPhone\": \"Yes\", \n" +
-                "}";
-        String badRequest = "{ \n" +
-                "    \"StatusOnPhone\": \"No\", \n" +
-                "}";
 
-        @Override
-        public void handle(HttpExchange httpExchange) throws IOException {
-
-            // Проверка, что пришел POST запрос
-            if ("POST".equals(httpExchange.getRequestMethod())) {
-
-                // Получение данных из запроса
-                InputStream inputStream = httpExchange.getRequestBody();
-                String requestBody = streamToString(inputStream);
-                JSONObject jsonBody = null;
-                try {
-                    jsonBody = new JSONObject(requestBody);
-                    // Проверка, что в запросе есть нужные данные
-                    if (!jsonBody.get("Phone").toString().isEmpty() && !jsonBody.get("Text").toString().isEmpty() && !jsonBody.get("INN").toString().isEmpty()) {
-                        // Отправка ответа, если данных корректны
-
-                        String INN = jsonBody.get("INN").toString();
-                        String Phone = jsonBody.get("Phone").toString();
-                        String Text = jsonBody.get("Text").toString();
-
-                        // Запись полученных данных из JSON
-                        DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
-                        String date = dateFormat.format(Calendar.getInstance().getTime());
-                        writedata += date + " : NEW_DATA:" + "\n" +
-                                "\t" + INN + "\n" +
-                                "\t" + Phone + "\n" +
-                                "\t" + Text + "\n";
-                        writeData(writedata);
-
-                        // Отправка SMS
-                        Telephony.SMS(Phone, Text);
-
-                        sendResponse(httpExchange, goodRequest.toString());
-                    } else {
-                        // Отправка ответа, если данных повреждены
-
-                        sendResponse(httpExchange, badRequest.toString());
-                    }
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                    sendResponse(httpExchange, e.getMessage());
-
-                    // Запись сообщения об ошибке с распознаванием JSON
-                    DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy 'at' HH:mm:ss");
-                    String date = dateFormat.format(Calendar.getInstance().getTime());
-                    ERROR += "\n\n" + date + " : ERROR(messageHandler)  JSONException!!! " + e.getMessage() + "\n\n";
-                    writeData(ERROR);
-                }
-            }
-        }
-    }
 
     // Остановка сервера
     private void stopServer() {
-        /*if (httpsServer != null) {
+        if (httpsServer != null) {
             httpsServer.stop(0);
             serverTextView.setText("Server is down");
             serverButton.setText("Start Server");
@@ -345,8 +281,8 @@ public class MainActivity extends AppCompatActivity {
             String date = dateFormat.format(Calendar.getInstance().getTime());
             msgLog += date + " : HTTPS Server Stop\n\n";
             viewScrollView(msgLog);
-        }*/
-        if (httpServer != null) {
+        }
+/*        if (httpServer != null) {
             httpServer.stop(0);
             serverTextView.setText("Server is down");
             serverButton.setText("Start Server");
@@ -354,7 +290,7 @@ public class MainActivity extends AppCompatActivity {
             String date = dateFormat.format(Calendar.getInstance().getTime());
             msgLog += date + " : Server Stop\n\n";
             viewScrollView(msgLog);
-        }
+        }*/
     }
 
     // Вывод данных на дисплей в ScrollView
@@ -362,37 +298,15 @@ public class MainActivity extends AppCompatActivity {
         MainActivity.this.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                writeData(data);
+                WriteData.writeData(data);
                 msg.setText(data);
             }
         });
     }
 
 
-    // Проверка, что во внешнее хранилище можно записывать данные
-    private boolean isExternalStorageAvaibleForRW() {
-        String exStorageState = Environment.getExternalStorageState();
-        if (exStorageState.equals(Environment.MEDIA_MOUNTED)) {
-            return true;
-        }
-        return false;
-    }
 
-    // Запись данных в файл
-    private void writeData(String data) {
-        File myExternalStorage = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath());
-        File documentsFile = new File(myExternalStorage, fileName);
-        FileOutputStream fos = null;
-        try {
-            fos = new FileOutputStream(documentsFile, true);
-            fos.write(data.getBytes(StandardCharsets.UTF_8));
-            fos.close();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
+
 
 
 }
